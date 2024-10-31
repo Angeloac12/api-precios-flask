@@ -1,7 +1,7 @@
 import os
 from flask import Flask, request, jsonify
 import requests
-from rapidfuzz import process
+from rapidfuzz import process, fuzz
 
 # Configuración de la API Supabase
 API_URL = "https://mrpitiwepgfuomjcmgkh.supabase.co/rest/v1/base_precios_por_cliente"
@@ -15,54 +15,49 @@ app = Flask(__name__)
 def obtener_productos():
     """Consulta todos los productos desde la base de datos Supabase."""
     response = requests.get(API_URL, headers=HEADERS)
-
-    print(f"Estado de la respuesta: {response.status_code}")  # Depuración
-    print(f"Contenido de la respuesta: {response.text}")  # Depuración
-
     if response.status_code == 200:
-        productos = response.json()
-        print(f"Productos recuperados: {productos}")  # Depuración adicional
-        return productos
+        return response.json()
     else:
         return []
 
-def buscar_producto_aproximado(consulta):
-    """Busca el producto más cercano usando coincidencia difusa."""
+def buscar_opciones_cercanas(consulta, umbral=80, max_opciones=5):
+    """Busca las 5 opciones más cercanas usando coincidencia difusa."""
     productos = obtener_productos()
-    if not productos:
-        return {"error": "No hay productos disponibles para comparar"}
+    productos_candidatos = []
 
-    # Extraer la lista de nombres de productos
-    nombres = [producto['product'] for producto in productos]
+    # Iterar sobre cada producto y calcular la similitud con la consulta
+    for producto in productos:
+        detalles_producto = f"{producto['product']} {producto['brand']} {producto.get('category', '')} {producto['price']}"
+        
+        # Calcular el puntaje de similitud
+        puntuacion = fuzz.token_set_ratio(consulta, detalles_producto)
+        
+        # Añadir productos que cumplen con el umbral de similitud
+        if puntuacion >= umbral:
+            productos_candidatos.append((producto, puntuacion))
 
-    # Intentar encontrar la mejor coincidencia
-    resultado = process.extractOne(consulta, nombres)
+    # Ordenar los productos por puntaje en orden descendente
+    productos_candidatos = sorted(productos_candidatos, key=lambda x: x[1], reverse=True)
 
-    if resultado:  # Verificar que extractOne no devuelva None
-        mejor_match, score, index = resultado
+    # Seleccionar las 5 mejores opciones
+    mejores_opciones = [producto for producto, _ in productos_candidatos[:max_opciones]]
+    
+    return mejores_opciones
 
-        if score > 60:  # Si la coincidencia es mayor a 60
-            producto_encontrado = productos[index]
-            return {
-                "id": producto_encontrado['id'],
-                "product": producto_encontrado['product'],
-                "brand": producto_encontrado['brand'],
-                "price": producto_encontrado['price1']
-            }
-        else:
-            return {"error": "No se encontró un producto suficientemente similar"}
+@app.route('/consulta_natural', methods=['GET'])
+def consulta_natural():
+    """Endpoint para recibir consultas en lenguaje natural."""
+    consulta = request.args.get('consulta')
+    if not consulta:
+        return jsonify({"error": "Debes especificar una consulta en lenguaje natural"}), 400
+
+    # Buscar las opciones más cercanas basadas en la consulta
+    mejores_opciones = buscar_opciones_cercanas(consulta)
+
+    if mejores_opciones:
+        return jsonify(mejores_opciones)
     else:
-        return {"error": "No se encontraron productos para comparar"}
-
-@app.route('/consulta', methods=['GET'])
-def consulta():
-    """Endpoint para recibir la consulta del producto."""
-    producto = request.args.get('producto')
-    if not producto:
-        return jsonify({"error": "Debes especificar un producto"}), 400
-
-    resultado = buscar_producto_aproximado(producto)
-    return jsonify(resultado)
+        return jsonify({"error": "No se encontraron productos que coincidan con la consulta"}), 404
 
 @app.route('/')
 def home():
@@ -73,4 +68,3 @@ if __name__ == '__main__':
     # Usamos el puerto asignado por Render, o 5000 por defecto
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
-
