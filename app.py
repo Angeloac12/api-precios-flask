@@ -24,26 +24,29 @@ def obtener_productos():
         return []
 
 def buscar_opciones_cercanas(consulta, umbral=50, max_opciones=5):
-    """Busca las 5 opciones más cercanas usando coincidencia difusa y registra los puntajes de similitud."""
+    """Busca las 5 opciones más cercanas usando coincidencia difusa basada en palabras clave."""
     productos = obtener_productos()
     if not productos:
         return {"error": "No hay productos disponibles para comparar"}
 
+    # Dividir la consulta en palabras clave
+    palabras_clave = consulta.lower().split()
     productos_candidatos = []
 
     for producto in productos:
-        # Verificar que los campos necesarios estén presentes
-        detalles_producto = f"{producto.get('product', '')} {producto.get('brand', '')} {producto.get('category', '')} {producto.get('price', '')}"
+        # Crear una cadena de detalles del producto
+        detalles_producto = f"{producto.get('product', '').lower()} {producto.get('brand', '').lower()} {producto.get('category', '').lower()} {producto.get('price', '')}"
         
-        # Calcular el puntaje de similitud
-        puntuacion = fuzz.token_set_ratio(consulta, detalles_producto)
+        # Calcular el puntaje de similitud para cada palabra clave
+        puntajes = [fuzz.partial_ratio(palabra, detalles_producto) for palabra in palabras_clave]
+        puntuacion_promedio = sum(puntajes) / len(puntajes) if puntajes else 0
 
         # Registrar detalles en los logs para depuración
-        print(f"Producto: {detalles_producto}, Puntaje de similitud: {puntuacion}")  # Depuración
-        
-        # Añadir productos que cumplen con el umbral de similitud
-        if puntuacion >= umbral:
-            productos_candidatos.append((producto, puntuacion))
+        print(f"Producto: {detalles_producto}, Puntaje promedio de similitud: {puntuacion_promedio}")  # Depuración
+
+        # Si el puntaje promedio cumple el umbral, añadir el producto
+        if puntuacion_promedio >= umbral:
+            productos_candidatos.append((producto, puntuacion_promedio))
 
     if not productos_candidatos:
         return {"error": "No se encontraron productos que cumplan con el umbral de coincidencia"}
@@ -55,6 +58,7 @@ def buscar_opciones_cercanas(consulta, umbral=50, max_opciones=5):
     mejores_opciones = [producto for producto, _ in productos_candidatos[:max_opciones]]
     
     return mejores_opciones
+
 
 
 @app.route('/consulta_natural', methods=['GET'])
