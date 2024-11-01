@@ -24,7 +24,7 @@ def obtener_productos():
         return []
 
 def buscar_opciones_cercanas(consulta, umbral=50, max_opciones=5):
-    """Busca las 5 opciones más cercanas usando coincidencia difusa."""
+    """Busca las 5 opciones más cercanas usando coincidencia difusa y registra los puntajes de similitud."""
     productos = obtener_productos()
     if not productos:
         return {"error": "No hay productos disponibles para comparar"}
@@ -37,6 +37,9 @@ def buscar_opciones_cercanas(consulta, umbral=50, max_opciones=5):
         
         # Calcular el puntaje de similitud
         puntuacion = fuzz.token_set_ratio(consulta, detalles_producto)
+
+        # Registrar detalles en los logs para depuración
+        print(f"Producto: {detalles_producto}, Puntaje de similitud: {puntuacion}")  # Depuración
         
         # Añadir productos que cumplen con el umbral de similitud
         if puntuacion >= umbral:
@@ -52,6 +55,7 @@ def buscar_opciones_cercanas(consulta, umbral=50, max_opciones=5):
     mejores_opciones = [producto for producto, _ in productos_candidatos[:max_opciones]]
     
     return mejores_opciones
+
 
 @app.route('/consulta_natural', methods=['GET'])
 def consulta_natural():
