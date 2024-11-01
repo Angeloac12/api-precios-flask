@@ -23,7 +23,7 @@ def obtener_productos():
     else:
         return []
 
-def buscar_opciones_cercanas(consulta, umbral=80, max_opciones=5):
+def buscar_opciones_cercanas(consulta, umbral=50, max_opciones=5):
     """Busca las 5 opciones más cercanas usando coincidencia difusa."""
     productos = obtener_productos()
     if not productos:
